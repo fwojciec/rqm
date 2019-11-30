@@ -62,8 +62,8 @@ func (rm *RequestMaker) makeRequest(ctx context.Context) {
 	r := rm.Pop()
 	b, err := getPageCtx(ctx, r.URL)
 	if err != nil {
-		if r.retryCounter < 3 {
-			// retry three times
+		if r.retryCounter < 2 {
+			// try three times
 			r.retryCounter++
 			rm.Push(r)
 		} else {
@@ -79,9 +79,11 @@ func (rm *RequestMaker) makeRequest(ctx context.Context) {
 }
 
 // NewRequestMaker returns a pointer to a new instance of RequestMaker.
-func NewRequestMaker(r *Rq, p Processor, q Queuer, minDelay, maxDelay int) *RequestMaker {
+func NewRequestMaker(p Processor, q Queuer, minDelay, maxDelay int, rs ...*Rq) *RequestMaker {
 	rm := &RequestMaker{q, p, minDelay, maxDelay}
-	rm.Push(r)
+	for _, r := range rs {
+		rm.Push(r)
+	}
 	return rm
 }
 
