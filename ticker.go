@@ -31,11 +31,10 @@ func NewRandomTicker(min, max int) *RandomTicker {
 
 // Stop stops the instance of RandomTicker.
 func (rt *RandomTicker) Stop() {
-	close(rt.stopc)
+	rt.stopc <- struct{}{}
 }
 
 func (rt *RandomTicker) loop() {
-	defer close(rt.C)
 	for {
 		time.Sleep(rt.nextInterval())
 		select {
