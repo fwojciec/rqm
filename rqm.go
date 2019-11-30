@@ -99,7 +99,7 @@ func getPageCtx(ctx context.Context, url string) (*bytes.Buffer, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("status code error %d %s", res.StatusCode, res.Status)
+		return nil, fmt.Errorf("status code error: %s", res.Status)
 	}
 	var b bytes.Buffer
 	_, err = io.Copy(&b, res.Body)
