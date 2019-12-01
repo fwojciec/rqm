@@ -30,7 +30,7 @@ type Queuer interface {
 
 // Processor processes fetched requests.
 type Processor interface {
-	Process(*Rq) error
+	Process(*Rq, Queuer) error
 }
 
 // RequestMaker makes requests.
@@ -72,7 +72,7 @@ func (rm *RequestMaker) makeRequest(ctx context.Context) {
 		}
 	}
 	r.Body = b
-	if err = rm.Process(r); err != nil {
+	if err = rm.Process(r, rm); err != nil {
 		// TODO: come up with a better way to handle errors
 		log.Printf("failed to process the body for %q: %s", r.URL, err)
 	}

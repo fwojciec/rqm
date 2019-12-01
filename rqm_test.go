@@ -20,7 +20,7 @@ type TestProcessor struct {
 	Error error
 }
 
-func (tp *TestProcessor) Process(r *rqm.Rq) error {
+func (tp *TestProcessor) Process(r *rqm.Rq, q rqm.Queuer) error {
 	tp.Body = r.Body
 	tp.Calls++
 	return tp.Error
