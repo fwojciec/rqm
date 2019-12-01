@@ -35,13 +35,19 @@ func (rt *RandomTicker) Stop() {
 }
 
 func (rt *RandomTicker) loop() {
+	i := rt.nextInterval()
 	for {
-		time.Sleep(rt.nextInterval())
+		// either a stop signal or a timeout
 		select {
 		case <-rt.stopc:
 			return
-		case rt.C <- time.Now():
-		default:
+		case <-time.After(i):
+			select {
+			case rt.C <- time.Now():
+				i = rt.nextInterval()
+			default:
+				// there could be no receiver...
+			}
 		}
 	}
 }
