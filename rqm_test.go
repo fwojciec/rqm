@@ -20,7 +20,7 @@ type TestProcessor struct {
 	Error error
 }
 
-func (tp *TestProcessor) Process(r *rqm.Rq, q rqm.Queuer) error {
+func (tp *TestProcessor) Process(ctx context.Context, r *rqm.Rq, q rqm.Queuer) error {
 	tp.Body = r.Body
 	tp.Calls++
 	return tp.Error
@@ -92,11 +92,15 @@ func TestRequestMaker(t *testing.T) {
 			defer ts.Close()
 			q := &rqm.Queue{}
 			p := &TestProcessor{Error: tc.processorError}
-			var rm *rqm.RequestMaker
+			rm, err := rqm.NewRequestMaker(p, q, 1, 2)
+			if err != nil {
+				t.Error(err)
+			}
 			if tc.addRequest {
-				rm = rqm.NewRequestMaker(p, q, 1, 2, &rqm.Rq{URL: ts.URL})
-			} else {
-				rm = rqm.NewRequestMaker(p, q, 1, 2)
+				err := rm.Push(context.Background(), &rqm.Rq{URL: ts.URL})
+				if err != nil {
+					t.Error(err)
+				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			defer cancel()

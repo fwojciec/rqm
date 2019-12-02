@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
 // PageType identifies the variant of the requested page. The type determines
@@ -23,14 +24,14 @@ type Rq struct {
 
 // Queuer manages the queue of requests waiting to be processed.
 type Queuer interface {
-	Pop() *Rq
-	Push(*Rq)
-	IsEmpty() bool
+	Pop(context.Context) (*Rq, error)
+	Push(context.Context, *Rq) error
+	IsEmpty(context.Context) (bool, error)
 }
 
 // Processor processes fetched requests.
 type Processor interface {
-	Process(*Rq, Queuer) error
+	Process(context.Context, *Rq, Queuer) error
 }
 
 // RequestMaker makes requests.
@@ -50,7 +51,12 @@ func (rm *RequestMaker) Run(ctx context.Context) error {
 			ticker.Stop()
 			return ctx.Err()
 		case <-ticker.C:
-			if rm.IsEmpty() {
+			isEmpty, err := rm.IsEmpty(ctx)
+			if err != nil {
+				log.Printf("database error: %s", err)
+				return err
+			}
+			if isEmpty {
 				continue
 			}
 			rm.makeRequest(ctx)
@@ -58,36 +64,49 @@ func (rm *RequestMaker) Run(ctx context.Context) error {
 	}
 }
 
-func (rm *RequestMaker) makeRequest(ctx context.Context) {
-	r := rm.Pop()
+func (rm *RequestMaker) makeRequest(ctx context.Context) error {
+	r, err := rm.Pop(ctx)
+	if err != nil {
+		return err
+	}
 	b, err := getPageCtx(ctx, r.URL)
 	if err != nil {
 		if r.retryCounter < 2 {
 			// try three times
 			r.retryCounter++
-			rm.Push(r)
+			err := rm.Push(ctx, r)
+			if err != nil {
+				return err
+			}
 		} else {
 			// TODO: come up with a better way to handle errors
 			log.Printf("failed to fetch %q: %s", r.URL, err)
 		}
 	}
 	r.Body = b
-	if err = rm.Process(r, rm); err != nil {
+	if err = rm.Process(ctx, r, rm); err != nil {
 		// TODO: come up with a better way to handle errors
 		log.Printf("failed to process the body for %q: %s", r.URL, err)
 	}
+	return nil
 }
 
 // NewRequestMaker returns a pointer to a new instance of RequestMaker.
-func NewRequestMaker(p Processor, q Queuer, minDelay, maxDelay int, rs ...*Rq) *RequestMaker {
+func NewRequestMaker(p Processor, q Queuer, minDelay, maxDelay int, rs ...*Rq) (*RequestMaker, error) {
 	rm := &RequestMaker{q, p, minDelay, maxDelay}
+	ctx := context.Background()
 	for _, r := range rs {
-		rm.Push(r)
+		err := rm.Push(ctx, r)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return rm
+	return rm, nil
 }
 
 func getPageCtx(ctx context.Context, url string) (*bytes.Buffer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
