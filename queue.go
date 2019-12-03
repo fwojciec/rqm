@@ -2,8 +2,20 @@ package rqm
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
+
+var (
+	// ErrQueueEmpty is returned when trying to Pop an item from empty queue
+	ErrQueueEmpty = errors.New("queue is empty")
+)
+
+// Queuer manages the queue of requests waiting to be processed.
+type Queuer interface {
+	Pop(context.Context) (*Rq, error)
+	Push(context.Context, *Rq) error
+}
 
 // Queue is a basic queuer implementation.
 type Queue struct {
@@ -15,6 +27,9 @@ type Queue struct {
 func (q *Queue) Pop(ctx context.Context) (r *Rq, err error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if len(q.q) == 0 {
+		return nil, ErrQueueEmpty
+	}
 	r, q.q = q.q[0], q.q[1:]
 	return
 }
@@ -25,11 +40,4 @@ func (q *Queue) Push(ctx context.Context, r *Rq) error {
 	defer q.mu.Unlock()
 	q.q = append(q.q, r)
 	return nil
-}
-
-// IsEmpty returns true if the queue is empty and false if not.
-func (q *Queue) IsEmpty(ctx context.Context) (bool, error) {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	return len(q.q) == 0, nil
 }

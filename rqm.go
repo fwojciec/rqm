@@ -3,6 +3,7 @@ package rqm
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,13 +21,6 @@ type Rq struct {
 	PageType     PageType
 	Body         *bytes.Buffer
 	retryCounter int
-}
-
-// Queuer manages the queue of requests waiting to be processed.
-type Queuer interface {
-	Pop(context.Context) (*Rq, error)
-	Push(context.Context, *Rq) error
-	IsEmpty(context.Context) (bool, error)
 }
 
 // Processor processes fetched requests.
@@ -51,24 +45,19 @@ func (rm *RequestMaker) Run(ctx context.Context) error {
 			ticker.Stop()
 			return ctx.Err()
 		case <-ticker.C:
-			isEmpty, err := rm.IsEmpty(ctx)
+			r, err := rm.Pop(ctx)
 			if err != nil {
-				log.Printf("database error: %s", err)
+				if errors.Is(err, ErrQueueEmpty) {
+					continue
+				}
 				return err
 			}
-			if isEmpty {
-				continue
-			}
-			rm.makeRequest(ctx)
+			rm.makeRequest(ctx, r)
 		}
 	}
 }
 
-func (rm *RequestMaker) makeRequest(ctx context.Context) error {
-	r, err := rm.Pop(ctx)
-	if err != nil {
-		return err
-	}
+func (rm *RequestMaker) makeRequest(ctx context.Context, r *Rq) error {
 	b, err := getPageCtx(ctx, r.URL)
 	if err != nil {
 		if r.retryCounter < 2 {
